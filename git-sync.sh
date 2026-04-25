@@ -12,21 +12,29 @@ ERASE=$'\r\033[K'
 
 SKIP_FETCH=0
 SKIP_CLEAN=0
-ARGS=()
-for arg in "$@"; do
-    case "$arg" in
-        --no-fetch|-n) SKIP_FETCH=1 ;;
-        --quiet|-q)    SKIP_CLEAN=1 ;;
-        *) ARGS+=("$arg") ;;
+
+while getopts ":nq-:" opt; do
+    case "$opt" in
+        n) SKIP_FETCH=1 ;;
+        q) SKIP_CLEAN=1 ;;
+        -)
+            case "$OPTARG" in
+                no-fetch) SKIP_FETCH=1 ;;
+                quiet)    SKIP_CLEAN=1 ;;
+                *) printf "Unknown option: --%s\n" "$OPTARG" >&2; exit 1 ;;
+            esac
+            ;;
+        ?) printf "Unknown option: -%s\n" "$OPTARG" >&2; exit 1 ;;
     esac
 done
+shift $(( OPTIND - 1 ))
 
-if [[ ${#ARGS[@]} -lt 1 ]]; then
-    printf "Usage: %s [--no-fetch|-n] [--quiet|-q] <directory>\n" "$0" >&2
+if [[ $# -lt 1 ]]; then
+    printf "Usage: %s [-n] [-q] <directory>\n" "$0" >&2
     exit 1
 fi
 
-ROOT="${ARGS[0]%/}"
+ROOT="${1%/}"
 
 if [[ ! -d "$ROOT" ]]; then
     printf "Error: '%s' is not a directory\n" "$ROOT" >&2
