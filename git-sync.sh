@@ -10,17 +10,24 @@ NC=$'\033[0m'
 BOLD=$'\033[1m'
 ERASE=$'\r\033[K'
 
+UP='↑'
+DOWN='↓'
+DASH='—'
+ELLIPSIS='…'
+
 SKIP_FETCH=0
 SKIP_CLEAN=0
 
-while getopts ":nq-:" opt; do
+while getopts ":nqa-:" opt; do
     case "$opt" in
         n) SKIP_FETCH=1 ;;
         q) SKIP_CLEAN=1 ;;
+        a) UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~' ;;
         -)
             case "$OPTARG" in
                 no-fetch) SKIP_FETCH=1 ;;
                 quiet)    SKIP_CLEAN=1 ;;
+                ascii)    UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~' ;;
                 *) printf "Unknown option: --%s\n" "$OPTARG" >&2; exit 1 ;;
             esac
             ;;
@@ -106,7 +113,7 @@ while IFS= read -r -d '' gitdir; do
             record "$name" "no remote" "$YELLOW" "$branch"
         else
             print_header
-            printf "  %sDirty%s --no remote tracking branch (branch: %s)\n" "$RED" "$NC" "$branch"
+            printf "  %sDirty%s $DASH no remote tracking branch (branch: %s)\n" "$RED" "$NC" "$branch"
             git -C "$repo" status --short 2>/dev/null | sed 's/^/    /'
             record "$name" "dirty/no remote" "$RED" "$branch"
         fi
@@ -118,21 +125,21 @@ while IFS= read -r -d '' gitdir; do
 
     if [[ -n "$dirty" ]]; then
         print_header
-        printf "  %sDIRTY%s --branch: %s\n" "$RED" "$NC" "$branch"
+        printf "  %sDIRTY%s $DASH branch: %s\n" "$RED" "$NC" "$branch"
         git -C "$repo" status --short 2>/dev/null | sed 's/^/    /'
 
         if [[ "$behind" -gt 0 && "$ahead" -gt 0 ]]; then
-            printf "  %sConflict risk:%s %d behind, %d local commits --manual intervention needed\n" \
+            printf "  %sConflict risk:%s %d behind, %d local commits $DASH manual intervention needed\n" \
                 "$RED" "$NC" "$behind" "$ahead"
-            record "$name" "dirty/conflict" "$RED" "${behind}v ${ahead}^ uncommitted"
+            record "$name" "dirty/conflict" "$RED" "${behind}${DOWN} ${ahead}${UP} uncommitted"
         elif [[ "$behind" -gt 0 ]]; then
-            printf "  %sCan pull:%s %d new remote commit(s) --stash or commit first\n" \
+            printf "  %sCan pull:%s %d new remote commit(s) $DASH stash or commit first\n" \
                 "$YELLOW" "$NC" "$behind"
-            record "$name" "dirty/can pull" "$RED" "${behind}v available"
+            record "$name" "dirty/can pull" "$RED" "${behind}${DOWN} available"
         elif [[ "$ahead" -gt 0 ]]; then
-            printf "  %s%d unpushed commit(s)%s --commit or stash first\n" \
+            printf "  %s%d unpushed commit(s)%s $DASH commit or stash first\n" \
                 "$YELLOW" "$ahead" "$NC"
-            record "$name" "dirty/unpushed" "$RED" "${ahead}^ to push"
+            record "$name" "dirty/unpushed" "$RED" "${ahead}${UP} to push"
         else
             record "$name" "dirty" "$RED" "uncommitted changes"
         fi
@@ -140,42 +147,42 @@ while IFS= read -r -d '' gitdir; do
     else
         if [[ "$ahead" -gt 0 && "$behind" -gt 0 ]]; then
             print_header
-            printf "  %sDiverged:%s %d ahead, %d behind on %s --pushing\n" \
+            printf "  %sDiverged:%s %d ahead, %d behind on %s $DASH pushing\n" \
                 "$YELLOW" "$NC" "$ahead" "$behind" "$branch"
             run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
             if [[ $rc -eq 0 ]]; then
                 printf "  %sPushed%s\n" "$GREEN" "$NC"
-                record "$name" "pushed" "$GREEN" "${ahead}^ (was diverged)"
+                record "$name" "pushed" "$GREEN" "${ahead}${UP} (was diverged)"
             else
                 printf "%s\n" "$out" | sed 's/^/    /'
-                printf "  %sPush failed%s --rebase required\n" "$RED" "$NC"
-                record "$name" "push failed" "$RED" "diverged ${ahead}^ ${behind}v"
+                printf "  %sPush failed%s $DASH rebase required\n" "$RED" "$NC"
+                record "$name" "push failed" "$RED" "diverged ${ahead}${UP} ${behind}${DOWN}"
             fi
         elif [[ "$ahead" -gt 0 ]]; then
             print_header
-            printf "  %sUnpushed:%s %d commit(s) on %s --pushing\n" \
+            printf "  %sUnpushed:%s %d commit(s) on %s $DASH pushing\n" \
                 "$YELLOW" "$NC" "$ahead" "$branch"
             run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
             if [[ $rc -eq 0 ]]; then
                 printf "  %sPushed%s\n" "$GREEN" "$NC"
-                record "$name" "pushed" "$GREEN" "${ahead}^"
+                record "$name" "pushed" "$GREEN" "${ahead}${UP}"
             else
                 printf "%s\n" "$out" | sed 's/^/    /'
                 printf "  %sPush failed%s\n" "$RED" "$NC"
-                record "$name" "push failed" "$RED" "${ahead}^"
+                record "$name" "push failed" "$RED" "${ahead}${UP}"
             fi
         elif [[ "$behind" -gt 0 ]]; then
             print_header
-            printf "  %sClean%s --%d commit(s) to pull on %s --pulling\n" \
+            printf "  %sClean%s $DASH %d commit(s) to pull on %s $DASH pulling\n" \
                 "$GREEN" "$NC" "$behind" "$branch"
             run_with_spinner "Pulling $name..." git -C "$repo" pull --ff-only; rc=$?
             if [[ $rc -eq 0 ]]; then
                 printf "  %sPulled%s\n" "$GREEN" "$NC"
-                record "$name" "pulled" "$GREEN" "${behind}v"
+                record "$name" "pulled" "$GREEN" "${behind}${DOWN}"
             else
                 printf "%s\n" "$out" | sed 's/^/    /'
                 printf "  %sPull failed%s\n" "$RED" "$NC"
-                record "$name" "pull failed" "$RED" "${behind}v"
+                record "$name" "pull failed" "$RED" "${behind}${DOWN}"
             fi
         else
             record "$name" "up to date" "$GREEN" "$branch"
@@ -189,7 +196,7 @@ if [[ "$found" -eq 0 ]]; then
     exit 0
 fi
 
-# ── Summary table ────────────────────────────────────────────────────────────
+# Summary table
 
 term_width=${COLUMNS:-$(tput cols 2>/dev/null)}
 term_width=${term_width:-80}
@@ -226,7 +233,7 @@ for i in "${!sum_names[@]}"; do
     name_col=$(printf "%-*s" "$col_name"   "${sum_names[$i]}")
     stat_col=$(printf "%-*s" "$col_status" "${sum_statuses[$i]}")
     detail="${sum_details[$i]}"
-    [[ ${#detail} -gt $col_detail ]] && detail="${detail:0:$(( col_detail - 1 ))}~"
+    [[ ${#detail} -gt $col_detail ]] && detail="${detail:0:$(( col_detail - 1 ))}${ELLIPSIS}"
     [[ "$detail" != "main" && "$detail" != "master" ]] && detail="${BOLD}${detail}${NC}"
     printf "%s  %s%s%s  %s\n" \
         "$name_col" \
