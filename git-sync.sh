@@ -110,7 +110,7 @@ while IFS= read -r -d '' gitdir; do
             record "$name" "no remote" "$YELLOW" "$branch"
         else
             print_header
-            printf "  %sDirty%s — no remote tracking branch (branch: %s)\n" "$RED" "$NC" "$branch"
+            printf "  %sDirty%s --no remote tracking branch (branch: %s)\n" "$RED" "$NC" "$branch"
             git -C "$repo" status --short 2>/dev/null | sed 's/^/    /'
             record "$name" "dirty/no remote" "$RED" "$branch"
         fi
@@ -122,21 +122,21 @@ while IFS= read -r -d '' gitdir; do
 
     if [[ -n "$dirty" ]]; then
         print_header
-        printf "  %sDIRTY%s — branch: %s\n" "$RED" "$NC" "$branch"
+        printf "  %sDIRTY%s --branch: %s\n" "$RED" "$NC" "$branch"
         git -C "$repo" status --short 2>/dev/null | sed 's/^/    /'
 
         if [[ "$behind" -gt 0 && "$ahead" -gt 0 ]]; then
-            printf "  %sConflict risk:%s %d behind, %d local commits — manual intervention needed\n" \
+            printf "  %sConflict risk:%s %d behind, %d local commits --manual intervention needed\n" \
                 "$RED" "$NC" "$behind" "$ahead"
-            record "$name" "dirty/conflict" "$RED" "${behind}↓ ${ahead}↑ uncommitted"
+            record "$name" "dirty/conflict" "$RED" "${behind}v ${ahead}^ uncommitted"
         elif [[ "$behind" -gt 0 ]]; then
-            printf "  %sCan pull:%s %d new remote commit(s) — stash or commit first\n" \
+            printf "  %sCan pull:%s %d new remote commit(s) --stash or commit first\n" \
                 "$YELLOW" "$NC" "$behind"
-            record "$name" "dirty/can pull" "$RED" "${behind}↓ available"
+            record "$name" "dirty/can pull" "$RED" "${behind}v available"
         elif [[ "$ahead" -gt 0 ]]; then
-            printf "  %s%d unpushed commit(s)%s — commit or stash first\n" \
+            printf "  %s%d unpushed commit(s)%s --commit or stash first\n" \
                 "$YELLOW" "$ahead" "$NC"
-            record "$name" "dirty/unpushed" "$RED" "${ahead}↑ to push"
+            record "$name" "dirty/unpushed" "$RED" "${ahead}^ to push"
         else
             record "$name" "dirty" "$RED" "uncommitted changes"
         fi
@@ -144,42 +144,42 @@ while IFS= read -r -d '' gitdir; do
     else
         if [[ "$ahead" -gt 0 && "$behind" -gt 0 ]]; then
             print_header
-            printf "  %sDiverged:%s %d ahead, %d behind on %s — pushing\n" \
+            printf "  %sDiverged:%s %d ahead, %d behind on %s --pushing\n" \
                 "$YELLOW" "$NC" "$ahead" "$behind" "$branch"
             run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
             if [[ $rc -eq 0 ]]; then
                 printf "  %sPushed%s\n" "$GREEN" "$NC"
-                record "$name" "pushed" "$GREEN" "${ahead}↑ (was diverged)"
+                record "$name" "pushed" "$GREEN" "${ahead}^ (was diverged)"
             else
                 printf "%s\n" "$out" | sed 's/^/    /'
-                printf "  %sPush failed%s — rebase required\n" "$RED" "$NC"
-                record "$name" "push failed" "$RED" "diverged ${ahead}↑ ${behind}↓"
+                printf "  %sPush failed%s --rebase required\n" "$RED" "$NC"
+                record "$name" "push failed" "$RED" "diverged ${ahead}^ ${behind}v"
             fi
         elif [[ "$ahead" -gt 0 ]]; then
             print_header
-            printf "  %sUnpushed:%s %d commit(s) on %s — pushing\n" \
+            printf "  %sUnpushed:%s %d commit(s) on %s --pushing\n" \
                 "$YELLOW" "$NC" "$ahead" "$branch"
             run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
             if [[ $rc -eq 0 ]]; then
                 printf "  %sPushed%s\n" "$GREEN" "$NC"
-                record "$name" "pushed" "$GREEN" "${ahead}↑"
+                record "$name" "pushed" "$GREEN" "${ahead}^"
             else
                 printf "%s\n" "$out" | sed 's/^/    /'
                 printf "  %sPush failed%s\n" "$RED" "$NC"
-                record "$name" "push failed" "$RED" "${ahead}↑"
+                record "$name" "push failed" "$RED" "${ahead}^"
             fi
         elif [[ "$behind" -gt 0 ]]; then
             print_header
-            printf "  %sClean%s — %d commit(s) to pull on %s — pulling\n" \
+            printf "  %sClean%s --%d commit(s) to pull on %s --pulling\n" \
                 "$GREEN" "$NC" "$behind" "$branch"
             run_with_spinner "Pulling $name..." git -C "$repo" pull --ff-only; rc=$?
             if [[ $rc -eq 0 ]]; then
                 printf "  %sPulled%s\n" "$GREEN" "$NC"
-                record "$name" "pulled" "$GREEN" "${behind}↓"
+                record "$name" "pulled" "$GREEN" "${behind}v"
             else
                 printf "%s\n" "$out" | sed 's/^/    /'
                 printf "  %sPull failed%s\n" "$RED" "$NC"
-                record "$name" "pull failed" "$RED" "${behind}↓"
+                record "$name" "pull failed" "$RED" "${behind}v"
             fi
         else
             record "$name" "up to date" "$GREEN" "$branch"
@@ -217,7 +217,7 @@ detail_avail=$(( term_width - col_name - col_status - 4 ))
 [[ $col_detail -gt $detail_avail ]] && col_detail=$detail_avail
 
 total=$(( col_name + col_status + 4 + col_detail ))
-sep=$(printf '%*s' "$total" '' | tr ' ' '─')
+sep=$(printf '%*s' "$total" '' | tr ' ' '-')
 
 printf "\n%s%s SUMMARY%s\n" "$BOLD" "$CYAN" "$NC"
 printf "%s%s%s\n" "$CYAN" "$sep" "$NC"
@@ -230,7 +230,7 @@ for i in "${!sum_names[@]}"; do
     name_col=$(printf "%-*s" "$col_name"   "${sum_names[$i]}")
     stat_col=$(printf "%-*s" "$col_status" "${sum_statuses[$i]}")
     detail="${sum_details[$i]}"
-    [[ ${#detail} -gt $col_detail ]] && detail="${detail:0:$(( col_detail - 1 ))}…"
+    [[ ${#detail} -gt $col_detail ]] && detail="${detail:0:$(( col_detail - 1 ))}~"
     [[ "$detail" != "main" && "$detail" != "master" ]] && detail="${BOLD}${detail}${NC}"
     printf "%s  %s%s%s  %s\n" \
         "$name_col" \
