@@ -11,16 +11,18 @@ BOLD=$'\033[1m'
 ERASE=$'\r\033[K'
 
 SKIP_FETCH=0
+SKIP_CLEAN=0
 ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --no-fetch|-n) SKIP_FETCH=1 ;;
+        --quiet|-q)    SKIP_CLEAN=1 ;;
         *) ARGS+=("$arg") ;;
     esac
 done
 
 if [[ ${#ARGS[@]} -lt 1 ]]; then
-    printf "Usage: %s [--no-fetch|-n] <directory>\n" "$0" >&2
+    printf "Usage: %s [--no-fetch|-n] [--quiet|-q] <directory>\n" "$0" >&2
     exit 1
 fi
 
@@ -214,7 +216,9 @@ printf "%s%s%s\n" "$CYAN" "$sep" "$NC"
 printf "%s%-*s  %-*s  Details%s\n" "$BOLD" "$col_name" "Repo" "$col_status" "Status" "$NC"
 printf "%s%s%s\n" "$CYAN" "$sep" "$NC"
 
+printed=0
 for i in "${!sum_names[@]}"; do
+    [[ $SKIP_CLEAN -eq 1 && "${sum_statuses[$i]}" == "up to date" ]] && continue
     name_col=$(printf "%-*s" "$col_name"   "${sum_names[$i]}")
     stat_col=$(printf "%-*s" "$col_status" "${sum_statuses[$i]}")
     detail="${sum_details[$i]}"
@@ -224,6 +228,8 @@ for i in "${!sum_names[@]}"; do
         "$name_col" \
         "${sum_colors[$i]}" "$stat_col" "$NC" \
         "$detail"
+    (( printed++ )) || true
 done
+[[ $SKIP_CLEAN -eq 1 && $printed -eq 0 ]] && printf "  %sAll repos up to date%s\n" "$GREEN" "$NC"
 
 printf "%s%s%s\n" "$CYAN" "$sep" "$NC"
