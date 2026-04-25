@@ -185,17 +185,28 @@ fi
 
 # ── Summary table ────────────────────────────────────────────────────────────
 
+term_width=${COLUMNS:-$(tput cols 2>/dev/null)}
+term_width=${term_width:-80}
+
 col_name=4      # min width "Repo"
 col_status=6    # min width "Status"
+col_detail=7    # min width "Details"
 
 for i in "${!sum_names[@]}"; do
     [[ ${#sum_names[$i]}    -gt $col_name   ]] && col_name=${#sum_names[$i]}
     [[ ${#sum_statuses[$i]} -gt $col_status ]] && col_status=${#sum_statuses[$i]}
+    [[ ${#sum_details[$i]}  -gt $col_detail ]] && col_detail=${#sum_details[$i]}
 done
 
 col_name=$(( col_name + 2 ))
 col_status=$(( col_status + 2 ))
-total=$(( col_name + col_status + 20 ))
+
+# Cap the details column so the table fits within the terminal width
+detail_avail=$(( term_width - col_name - col_status - 4 ))
+[[ $detail_avail -lt 10 ]] && detail_avail=10
+[[ $col_detail -gt $detail_avail ]] && col_detail=$detail_avail
+
+total=$(( col_name + col_status + 4 + col_detail ))
 sep=$(printf '%*s' "$total" '' | tr ' ' '─')
 
 printf "\n%s%s SUMMARY%s\n" "$BOLD" "$CYAN" "$NC"
@@ -207,6 +218,7 @@ for i in "${!sum_names[@]}"; do
     name_col=$(printf "%-*s" "$col_name"   "${sum_names[$i]}")
     stat_col=$(printf "%-*s" "$col_status" "${sum_statuses[$i]}")
     detail="${sum_details[$i]}"
+    [[ ${#detail} -gt $col_detail ]] && detail="${detail:0:$(( col_detail - 1 ))}…"
     [[ "$detail" != "main" && "$detail" != "master" ]] && detail="${BOLD}${detail}${NC}"
     printf "%s  %s%s%s  %s\n" \
         "$name_col" \
