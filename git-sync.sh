@@ -29,12 +29,8 @@ while getopts ":nq-:" opt; do
 done
 shift $(( OPTIND - 1 ))
 
-if [[ $# -lt 1 ]]; then
-    printf "Usage: %s [-n] [-q] <directory>\n" "$0" >&2
-    exit 1
-fi
-
-ROOT="${1%/}"
+ROOT="${1:-$PWD}"
+ROOT="${ROOT%/}"
 
 if [[ ! -d "$ROOT" ]]; then
     printf "Error: '%s' is not a directory\n" "$ROOT" >&2
