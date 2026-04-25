@@ -21,10 +21,18 @@ status (green = healthy, yellow = attention, red = needs intervention).
 ## Usage
 
 ```sh
-git-sync.sh [--no-fetch|-n] <directory>
+git-sync.sh [-n] [-q] [-a] [directory]
 ```
 
-`-n` / `--no-fetch` skips the `git fetch` step. Useful when offline — ahead/behind counts are based on the last known remote refs.
+If `directory` is omitted, the current working directory is used.
+
+| Flag | Long form | Description |
+|---|---|---|
+| `-n` | `--no-fetch` | Skip `git fetch`; use last known remote refs (useful offline) |
+| `-q` | `--quiet` | Omit up-to-date repos from the summary table |
+| `-a` | `--ascii` | Use ASCII-only symbols (`^` `v` `--` `~`) instead of Unicode |
+
+Flags can be combined: `-qn`, `-qa`, `-nqa`, etc.
 
 ## Example
 
@@ -42,13 +50,13 @@ $ git-sync.sh ~/projects
   Can pull: 1 new remote commit(s) — stash or commit first
 
  SUMMARY
-────────────────────────────────────────────────
+----------------------------------------------------
 Repo                  Status          Details
-────────────────────────────────────────────────
+----------------------------------------------------
 api-server            pushed          2↑
 frontend              dirty/can pull  1↓ available
 mobile                up to date      main
 infra/k8s             pulled          3↓
 infra/terraform       up to date      main
-────────────────────────────────────────────────
+----------------------------------------------------
 ```
