@@ -16,17 +16,20 @@ DASH='—'
 ELLIPSIS='…'
 
 SKIP_FETCH=0
-SKIP_CLEAN=0
+SKIP_CLEAN=1
+DRY_RUN=0
 
-while getopts ":nqa-:" opt; do
+while getopts ":nvda-:" opt; do
     case "$opt" in
         n) SKIP_FETCH=1 ;;
-        q) SKIP_CLEAN=1 ;;
+        v) SKIP_CLEAN=0 ;;
+        d) DRY_RUN=1 ;;
         a) UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~' ;;
         -)
             case "$OPTARG" in
                 no-fetch) SKIP_FETCH=1 ;;
-                quiet)    SKIP_CLEAN=1 ;;
+                verbose)  SKIP_CLEAN=0 ;;
+                dry-run)  DRY_RUN=1 ;;
                 ascii)    UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~' ;;
                 *) printf "Unknown option: --%s\n" "$OPTARG" >&2; exit 1 ;;
             esac
@@ -147,42 +150,60 @@ while IFS= read -r -d '' gitdir; do
     else
         if [[ "$ahead" -gt 0 && "$behind" -gt 0 ]]; then
             print_header
-            printf "  %sDiverged:%s %d ahead, %d behind on %s $DASH pushing\n" \
-                "$YELLOW" "$NC" "$ahead" "$behind" "$branch"
-            run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
-            if [[ $rc -eq 0 ]]; then
-                printf "  %sPushed%s\n" "$GREEN" "$NC"
-                record "$name" "pushed" "$GREEN" "${ahead}${UP} (was diverged)"
+            if [[ $DRY_RUN -eq 1 ]]; then
+                printf "  %sDiverged:%s %d ahead, %d behind on %s $DASH would push\n" \
+                    "$YELLOW" "$NC" "$ahead" "$behind" "$branch"
+                record "$name" "would push" "$YELLOW" "diverged ${ahead}${UP} ${behind}${DOWN}"
             else
-                printf "%s\n" "$out" | sed 's/^/    /'
-                printf "  %sPush failed%s $DASH rebase required\n" "$RED" "$NC"
-                record "$name" "push failed" "$RED" "diverged ${ahead}${UP} ${behind}${DOWN}"
+                printf "  %sDiverged:%s %d ahead, %d behind on %s $DASH pushing\n" \
+                    "$YELLOW" "$NC" "$ahead" "$behind" "$branch"
+                run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
+                if [[ $rc -eq 0 ]]; then
+                    printf "  %sPushed%s\n" "$GREEN" "$NC"
+                    record "$name" "pushed" "$GREEN" "${ahead}${UP} (was diverged)"
+                else
+                    printf "%s\n" "$out" | sed 's/^/    /'
+                    printf "  %sPush failed%s $DASH rebase required\n" "$RED" "$NC"
+                    record "$name" "push failed" "$RED" "diverged ${ahead}${UP} ${behind}${DOWN}"
+                fi
             fi
         elif [[ "$ahead" -gt 0 ]]; then
             print_header
-            printf "  %sUnpushed:%s %d commit(s) on %s $DASH pushing\n" \
-                "$YELLOW" "$NC" "$ahead" "$branch"
-            run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
-            if [[ $rc -eq 0 ]]; then
-                printf "  %sPushed%s\n" "$GREEN" "$NC"
-                record "$name" "pushed" "$GREEN" "${ahead}${UP}"
+            if [[ $DRY_RUN -eq 1 ]]; then
+                printf "  %sUnpushed:%s %d commit(s) on %s $DASH would push\n" \
+                    "$YELLOW" "$NC" "$ahead" "$branch"
+                record "$name" "would push" "$YELLOW" "${ahead}${UP}"
             else
-                printf "%s\n" "$out" | sed 's/^/    /'
-                printf "  %sPush failed%s\n" "$RED" "$NC"
-                record "$name" "push failed" "$RED" "${ahead}${UP}"
+                printf "  %sUnpushed:%s %d commit(s) on %s $DASH pushing\n" \
+                    "$YELLOW" "$NC" "$ahead" "$branch"
+                run_with_spinner "Pushing $name..." git -C "$repo" push origin; rc=$?
+                if [[ $rc -eq 0 ]]; then
+                    printf "  %sPushed%s\n" "$GREEN" "$NC"
+                    record "$name" "pushed" "$GREEN" "${ahead}${UP}"
+                else
+                    printf "%s\n" "$out" | sed 's/^/    /'
+                    printf "  %sPush failed%s\n" "$RED" "$NC"
+                    record "$name" "push failed" "$RED" "${ahead}${UP}"
+                fi
             fi
         elif [[ "$behind" -gt 0 ]]; then
             print_header
-            printf "  %sClean%s $DASH %d commit(s) to pull on %s $DASH pulling\n" \
-                "$GREEN" "$NC" "$behind" "$branch"
-            run_with_spinner "Pulling $name..." git -C "$repo" pull --ff-only; rc=$?
-            if [[ $rc -eq 0 ]]; then
-                printf "  %sPulled%s\n" "$GREEN" "$NC"
-                record "$name" "pulled" "$GREEN" "${behind}${DOWN}"
+            if [[ $DRY_RUN -eq 1 ]]; then
+                printf "  %sClean%s $DASH %d commit(s) to pull on %s $DASH would pull\n" \
+                    "$GREEN" "$NC" "$behind" "$branch"
+                record "$name" "would pull" "$YELLOW" "${behind}${DOWN}"
             else
-                printf "%s\n" "$out" | sed 's/^/    /'
-                printf "  %sPull failed%s\n" "$RED" "$NC"
-                record "$name" "pull failed" "$RED" "${behind}${DOWN}"
+                printf "  %sClean%s $DASH %d commit(s) to pull on %s $DASH pulling\n" \
+                    "$GREEN" "$NC" "$behind" "$branch"
+                run_with_spinner "Pulling $name..." git -C "$repo" pull --ff-only; rc=$?
+                if [[ $rc -eq 0 ]]; then
+                    printf "  %sPulled%s\n" "$GREEN" "$NC"
+                    record "$name" "pulled" "$GREEN" "${behind}${DOWN}"
+                else
+                    printf "%s\n" "$out" | sed 's/^/    /'
+                    printf "  %sPull failed%s\n" "$RED" "$NC"
+                    record "$name" "pull failed" "$RED" "${behind}${DOWN}"
+                fi
             fi
         else
             record "$name" "up to date" "$GREEN" "$branch"
