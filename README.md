@@ -8,12 +8,15 @@ on the state of the working tree.
 
 | State | Action |
 |---|---|
-| Clean, up to date | No output (appears in summary only) |
+| Clean, up to date | No output; omitted from summary (shown with `-v`) |
 | Clean, behind remote | `git pull --ff-only` |
 | Clean, ahead of remote | `git push origin` |
-| Clean, diverged | Attempts push, reports failure |
+| Clean, diverged | Attempts push, reports failure if rebase required |
 | Dirty | Reports changed files; advises on pull/push/conflict risk |
 | No tracking branch | Reports and skips |
+
+With `--dry-run`, no push or pull is performed — the summary shows `would push`
+or `would pull` instead.
 
 A summary table is printed at the end with one row per repository, coloured by
 status (green = healthy, yellow = attention, red = needs intervention).
@@ -21,7 +24,7 @@ status (green = healthy, yellow = attention, red = needs intervention).
 ## Usage
 
 ```sh
-git-sync.sh [-n] [-q] [-a] [directory]
+git-sync.sh [-n] [-v] [-d] [-a] [directory]
 ```
 
 If `directory` is omitted, the current working directory is used.
@@ -29,10 +32,11 @@ If `directory` is omitted, the current working directory is used.
 | Flag | Long form | Description |
 |---|---|---|
 | `-n` | `--no-fetch` | Skip `git fetch`; use last known remote refs (useful offline) |
-| `-q` | `--quiet` | Omit up-to-date repos from the summary table |
+| `-v` | `--verbose` | Include up-to-date repos in the summary table |
+| `-d` | `--dry-run` | Preview actions without pulling or pushing |
 | `-a` | `--ascii` | Use ASCII-only symbols (`^` `v` `--` `~`) instead of Unicode |
 
-Flags can be combined: `-qn`, `-qa`, `-nqa`, etc.
+Flags can be combined: `-vn`, `-va`, `-nda`, etc.
 
 ## Example
 
@@ -51,12 +55,12 @@ $ git-sync.sh ~/projects
 
  SUMMARY
 ----------------------------------------------------
-Repo                  Status          Details
+Repo        Status          Details
 ----------------------------------------------------
-api-server            pushed          2↑
-frontend              dirty/can pull  1↓ available
-mobile                up to date      main
-infra/k8s             pulled          3↓
-infra/terraform       up to date      main
+api-server  pushed          2↑
+frontend    dirty/can pull  1↓ available
+infra/k8s   pulled          3↓
 ----------------------------------------------------
 ```
+
+Up-to-date repos are omitted from the summary by default. Pass `-v` to show all.
