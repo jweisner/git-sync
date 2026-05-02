@@ -29,19 +29,20 @@ status (green = healthy, yellow = attention, red = needs intervention).
 ## Usage
 
 ```sh
-git-sync.sh [-n] [-v] [-d] [-a] [directory]
+git-sync.sh [-h] [-o] [-v] [-d] [-a] [directory]
 ```
 
 If `directory` is omitted, the current working directory is used.
 
 | Flag | Long form | Description |
 |---|---|---|
-| `-n` | `--no-fetch` | Skip `git fetch`; use last known remote refs (useful offline) |
+| `-h` | `--help` | Show usage and exit |
+| `-o` | `--offline` | Skip `git fetch`; use last known remote refs (useful offline) |
 | `-v` | `--verbose` | Include up-to-date repos in the summary table |
 | `-d` | `--dry-run` | Preview actions without pulling or pushing |
 | `-a` | `--ascii` | Use ASCII-only symbols (`^` `v` `--` `~` `->`) instead of Unicode |
 
-Flags can be combined: `-vn`, `-va`, `-nda`, etc.
+Flags can be combined: `-vo`, `-va`, `-oda`, etc.
 
 ## Example
 
