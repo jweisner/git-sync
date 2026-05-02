@@ -16,7 +16,7 @@ DASH='—'
 ELLIPSIS='…'
 ARROW='→'
 
-SKIP_FETCH=0
+OFFLINE=0
 SKIP_CLEAN=1
 DRY_RUN=0
 
@@ -29,7 +29,7 @@ fetch updates, pull fast-forwardable branches, and push local commits.
 
 Options:
   -h, --help       Show this help message and exit
-  -n, --no-fetch   Skip fetching from remotes
+  -o, --offline     Skip fetching from remotes
   -v, --verbose    Show repos that are up to date in the summary
   -d, --dry-run    Show what would be done without making changes
   -a, --ascii      Use ASCII-only symbols in output
@@ -37,17 +37,17 @@ EOF
     exit 0
 }
 
-while getopts ":hnvda-:" opt; do
+while getopts ":hovda-:" opt; do
     case "$opt" in
         h) usage ;;
-        n) SKIP_FETCH=1 ;;
+        o) OFFLINE=1 ;;
         v) SKIP_CLEAN=0 ;;
         d) DRY_RUN=1 ;;
         a) UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~'; ARROW='->' ;;
         -)
             case "$OPTARG" in
                 help)     usage ;;
-                no-fetch) SKIP_FETCH=1 ;;
+                offline)  OFFLINE=1 ;;
                 verbose)  SKIP_CLEAN=0 ;;
                 dry-run)  DRY_RUN=1 ;;
                 ascii)    UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~'; ARROW='->' ;;
@@ -148,7 +148,7 @@ while IFS= read -r -d '' gitdir; do
     found=1
     header_printed=0
 
-    if [[ $SKIP_FETCH -eq 0 ]]; then
+    if [[ $OFFLINE -eq 0 ]]; then
         run_with_spinner "Fetching $name..." git -C "$repo" fetch --all || true
     fi
 
