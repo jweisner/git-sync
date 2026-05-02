@@ -20,14 +20,33 @@ SKIP_FETCH=0
 SKIP_CLEAN=1
 DRY_RUN=0
 
-while getopts ":nvda-:" opt; do
+usage() {
+    cat <<EOF
+Usage: ${0##*/} [OPTIONS] [DIRECTORY]
+
+Scan DIRECTORY (default: current directory) for git repositories,
+fetch updates, pull fast-forwardable branches, and push local commits.
+
+Options:
+  -h, --help       Show this help message and exit
+  -n, --no-fetch   Skip fetching from remotes
+  -v, --verbose    Show repos that are up to date in the summary
+  -d, --dry-run    Show what would be done without making changes
+  -a, --ascii      Use ASCII-only symbols in output
+EOF
+    exit 0
+}
+
+while getopts ":hnvda-:" opt; do
     case "$opt" in
+        h) usage ;;
         n) SKIP_FETCH=1 ;;
         v) SKIP_CLEAN=0 ;;
         d) DRY_RUN=1 ;;
         a) UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~'; ARROW='->' ;;
         -)
             case "$OPTARG" in
+                help)     usage ;;
                 no-fetch) SKIP_FETCH=1 ;;
                 verbose)  SKIP_CLEAN=0 ;;
                 dry-run)  DRY_RUN=1 ;;
