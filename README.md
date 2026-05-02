@@ -9,12 +9,13 @@ not just `origin`.
 
 | State | Action |
 |---|---|
-| Clean, up to date | No output; omitted from summary (shown with `-v`) |
+| Clean, up to date | No output; omitted from summary (shown with `-v` or when fetch had errors) |
 | Clean, behind remote | `git pull --ff-only` |
 | Clean, ahead of remote | `git push` to all remotes |
 | Clean, diverged | Attempts push to all remotes, reports failure if rebase required |
 | Dirty | Reports changed files; advises on pull/push/conflict risk |
 | No tracking branch | Reports and skips |
+| All remotes unreachable | `fetch failed` with skipped/failed remote names |
 
 When a repo has multiple remotes, the repo header lists them and push results
 are reported per-remote. If some remotes succeed and others fail, the summary
@@ -68,6 +69,19 @@ a wall-clock timer, so large fetches on slow links are never killed mid-transfer
 
 If a git operation fails with a connection error, the host is added to the
 blocklist so subsequent repos at the same host are skipped without waiting.
+
+### Fetch failures in the summary
+
+Connection errors and skipped remotes during fetch are surfaced in the summary
+table:
+
+- If **all** remotes for a repo failed to fetch, the summary shows `fetch failed`
+  in red with details like `skipped: gitlab; failed: origin`.
+- If **some** remotes failed but others succeeded, the normal status is shown with
+  the fetch failure appended to the details column (e.g. `main (skipped: gitlab)`)
+  and the row colour is upgraded to yellow.
+- Repos that would normally be hidden as "up to date" are always shown when they
+  have fetch warnings, even without `-v`.
 
 ## Ctrl+C handling
 

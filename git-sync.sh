@@ -281,10 +281,13 @@ while IFS= read -r -d '' gitdir; do
     SKIP_REPO=0
     mapfile -t remotes < <(git -C "$repo" remote 2>/dev/null)
 
+    fetch_skip=()
+    fetch_fail=()
     if [[ $OFFLINE -eq 0 ]]; then
         for r in "${remotes[@]}"; do
             [[ $SKIP_REPO -eq 1 ]] && break
             if ! _check_remote_host "$repo" "$r"; then
+                fetch_skip+=("$r")
                 continue
             fi
             run_with_spinner "Fetching $name ${ARROW} $r..." _git -C "$repo" fetch "$r"; rc=$?
@@ -292,6 +295,7 @@ while IFS= read -r -d '' gitdir; do
                 break
             elif [[ $rc -ne 0 ]] && _is_connection_error "$out"; then
                 _record_failed_host "$repo" "$r"
+                fetch_fail+=("$r")
                 print_header
                 printf "  %sFetch from %s failed (connection error)%s\n" "$RED" "$r" "$NC"
             fi
@@ -300,6 +304,22 @@ while IFS= read -r -d '' gitdir; do
             record "$name" "skipped" "$YELLOW" "interrupted"
             continue
         fi
+        if [[ $(( ${#fetch_skip[@]} + ${#fetch_fail[@]} )) -gt 0 && $(( ${#fetch_skip[@]} + ${#fetch_fail[@]} )) -eq ${#remotes[@]} ]]; then
+            print_header
+            local_err=()
+            [[ ${#fetch_skip[@]} -gt 0 ]] && local_err+=("skipped: $(IFS=', '; echo "${fetch_skip[*]}")")
+            [[ ${#fetch_fail[@]} -gt 0 ]] && local_err+=("failed: $(IFS=', '; echo "${fetch_fail[*]}")")
+            record "$name" "fetch failed" "$RED" "$(IFS='; '; echo "${local_err[*]}")"
+            continue
+        fi
+    fi
+
+    fetch_warn=""
+    if [[ $(( ${#fetch_skip[@]} + ${#fetch_fail[@]} )) -gt 0 ]]; then
+        parts=()
+        [[ ${#fetch_skip[@]} -gt 0 ]] && parts+=("skipped: $(IFS=', '; echo "${fetch_skip[*]}")")
+        [[ ${#fetch_fail[@]} -gt 0 ]] && parts+=("failed: $(IFS=', '; echo "${fetch_fail[*]}")")
+        fetch_warn=" ($(IFS='; '; echo "${parts[*]}"))"
     fi
 
     branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "(detached)")
@@ -360,12 +380,16 @@ while IFS= read -r -d '' gitdir; do
                 elif [[ ${#push_fail[@]} -eq 0 ]]; then
                     detail="${ahead}${UP} (was diverged)"
                     [[ ${#remotes[@]} -gt 1 ]] && detail="${ahead}${UP} (${#remotes[@]} remotes, was diverged)"
-                    record "$name" "pushed" "$GREEN" "$detail"
+                    if [[ -n "$fetch_warn" ]]; then
+                        record "$name" "pushed" "$YELLOW" "${detail}${fetch_warn}"
+                    else
+                        record "$name" "pushed" "$GREEN" "$detail"
+                    fi
                 elif [[ ${#push_ok[@]} -gt 0 ]]; then
-                    record "$name" "partial push" "$YELLOW" "failed: $(IFS=', '; echo "${push_fail[*]}")"
+                    record "$name" "partial push" "$YELLOW" "failed: $(IFS=', '; echo "${push_fail[*]}")${fetch_warn}"
                 else
                     printf "  %sRebase required%s\n" "$RED" "$NC"
-                    record "$name" "push failed" "$RED" "diverged ${ahead}${UP} ${behind}${DOWN}"
+                    record "$name" "push failed" "$RED" "diverged ${ahead}${UP} ${behind}${DOWN}${fetch_warn}"
                 fi
             fi
         elif [[ "$ahead" -gt 0 ]]; then
@@ -385,11 +409,15 @@ while IFS= read -r -d '' gitdir; do
                 elif [[ ${#push_fail[@]} -eq 0 ]]; then
                     detail="${ahead}${UP}"
                     [[ ${#remotes[@]} -gt 1 ]] && detail+=" (${#remotes[@]} remotes)"
-                    record "$name" "pushed" "$GREEN" "$detail"
+                    if [[ -n "$fetch_warn" ]]; then
+                        record "$name" "pushed" "$YELLOW" "${detail}${fetch_warn}"
+                    else
+                        record "$name" "pushed" "$GREEN" "$detail"
+                    fi
                 elif [[ ${#push_ok[@]} -gt 0 ]]; then
-                    record "$name" "partial push" "$YELLOW" "failed: $(IFS=', '; echo "${push_fail[*]}")"
+                    record "$name" "partial push" "$YELLOW" "failed: $(IFS=', '; echo "${push_fail[*]}")${fetch_warn}"
                 else
-                    record "$name" "push failed" "$RED" "${ahead}${UP}"
+                    record "$name" "push failed" "$RED" "${ahead}${UP}${fetch_warn}"
                 fi
             fi
         elif [[ "$behind" -gt 0 ]]; then
@@ -410,7 +438,11 @@ while IFS= read -r -d '' gitdir; do
                     record "$name" "pull failed" "$RED" "connection error"
                 elif [[ $rc -eq 0 ]]; then
                     printf "  %sPulled%s\n" "$GREEN" "$NC"
-                    record "$name" "pulled" "$GREEN" "${behind}${DOWN}"
+                    if [[ -n "$fetch_warn" ]]; then
+                        record "$name" "pulled" "$YELLOW" "${behind}${DOWN}${fetch_warn}"
+                    else
+                        record "$name" "pulled" "$GREEN" "${behind}${DOWN}"
+                    fi
                 else
                     printf "%s\n" "$out" | sed 's/^/    /'
                     printf "  %sPull failed%s\n" "$RED" "$NC"
@@ -418,7 +450,11 @@ while IFS= read -r -d '' gitdir; do
                 fi
             fi
         else
-            record "$name" "up to date" "$GREEN" "$branch"
+            if [[ -n "$fetch_warn" ]]; then
+                record "$name" "up to date" "$YELLOW" "${branch}${fetch_warn}"
+            else
+                record "$name" "up to date" "$GREEN" "$branch"
+            fi
         fi
     fi
 
@@ -462,7 +498,7 @@ printf "%s%s%s\n" "$CYAN" "$sep" "$NC"
 
 printed=0
 for i in "${!sum_names[@]}"; do
-    [[ $SKIP_CLEAN -eq 1 && "${sum_statuses[$i]}" == "up to date" ]] && continue
+    [[ $SKIP_CLEAN -eq 1 && "${sum_statuses[$i]}" == "up to date" && "${sum_colors[$i]}" == "$GREEN" ]] && continue
     name_col=$(printf "%-*s" "$col_name"   "${sum_names[$i]}")
     stat_col=$(printf "%-*s" "$col_status" "${sum_statuses[$i]}")
     detail="${sum_details[$i]}"
