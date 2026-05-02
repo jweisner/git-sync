@@ -29,7 +29,7 @@ status (green = healthy, yellow = attention, red = needs intervention).
 ## Usage
 
 ```sh
-git-sync.sh [-h] [-o] [-v] [-d] [-a] [directory]
+git-sync.sh [-h] [-o] [-v] [-d] [-a] [-t N] [directory]
 ```
 
 If `directory` is omitted, the current working directory is used.
@@ -41,8 +41,39 @@ If `directory` is omitted, the current working directory is used.
 | `-v` | `--verbose` | Include up-to-date repos in the summary table |
 | `-d` | `--dry-run` | Preview actions without pulling or pushing |
 | `-a` | `--ascii` | Use ASCII-only symbols (`^` `v` `--` `~` `->`) instead of Unicode |
+| `-t N` | `--timeout N` | Seconds before a stalled remote operation times out (default: 10) |
 
 Flags can be combined: `-vo`, `-va`, `-oda`, etc.
+
+## Timeouts and unreachable hosts
+
+Before contacting a remote for the first time, git-sync probes the host with a
+TCP connection test (`nc -z`, 5-second timeout). If the probe fails the host is
+added to a blocklist and every remote pointing at it is skipped instantly for the
+rest of the run. This keeps the script fast when a VPN is down or a server is
+unreachable.
+
+If `nc` (netcat) is not installed, probing is disabled and a warning is printed.
+The script will still work but will rely on git-native timeouts to detect
+unreachable hosts.
+
+For active connections, git-sync uses git's built-in stall detection rather than
+a wall-clock timer, so large fetches on slow links are never killed mid-transfer:
+
+- **HTTPS**: `http.lowSpeedLimit` (1 KB/s) and `http.lowSpeedTime` abort
+  transfers only when throughput drops below the threshold for the timeout
+  duration.
+- **SSH**: `ConnectTimeout`, `ServerAliveInterval`, and `ServerAliveCountMax`
+  detect dead sessions without interfering with slow-but-progressing transfers.
+
+If a git operation fails with a connection error, the host is added to the
+blocklist so subsequent repos at the same host are skipped without waiting.
+
+## Ctrl+C handling
+
+Press **Ctrl+C** once to skip the current repository and move on to the next.
+Press **Ctrl+C** twice quickly (within one second) to exit immediately. Skipped
+repos appear in the summary as `skipped` / `interrupted`.
 
 ## Example
 

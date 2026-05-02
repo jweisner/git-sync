@@ -19,6 +19,17 @@ ARROW='→'
 OFFLINE=0
 SKIP_CLEAN=1
 DRY_RUN=0
+GIT_TIMEOUT=10
+SKIP_REPO=0
+_bg_pid=""
+_last_int_at=0
+declare -A _failed_hosts
+declare -A _probed_hosts
+PROBE_TIMEOUT=5
+HAS_NC=0
+if command -v nc >/dev/null 2>&1; then
+    HAS_NC=1
+fi
 
 usage() {
     cat <<EOF
@@ -33,17 +44,21 @@ Options:
   -v, --verbose    Show repos that are up to date in the summary
   -d, --dry-run    Show what would be done without making changes
   -a, --ascii      Use ASCII-only symbols in output
+  -t, --timeout N  Seconds before a stalled remote operation times out (default: 10)
+
+Press Ctrl+C to skip the current repo, or twice quickly to exit.
 EOF
     exit 0
 }
 
-while getopts ":hovda-:" opt; do
+while getopts ":hovdat:-:" opt; do
     case "$opt" in
         h) usage ;;
         o) OFFLINE=1 ;;
         v) SKIP_CLEAN=0 ;;
         d) DRY_RUN=1 ;;
         a) UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~'; ARROW='->' ;;
+        t) GIT_TIMEOUT="$OPTARG" ;;
         -)
             case "$OPTARG" in
                 help)     usage ;;
@@ -51,9 +66,12 @@ while getopts ":hovda-:" opt; do
                 verbose)  SKIP_CLEAN=0 ;;
                 dry-run)  DRY_RUN=1 ;;
                 ascii)    UP='^'; DOWN='v'; DASH='--'; ELLIPSIS='~'; ARROW='->' ;;
+                timeout)  GIT_TIMEOUT="${!OPTIND}"; OPTIND=$(( OPTIND + 1 )) ;;
+                timeout=*) GIT_TIMEOUT="${OPTARG#*=}" ;;
                 *) printf "Unknown option: --%s\n" "$OPTARG" >&2; exit 1 ;;
             esac
             ;;
+        :) printf "Option -%s requires an argument\n" "$OPTARG" >&2; exit 1 ;;
         ?) printf "Unknown option: -%s\n" "$OPTARG" >&2; exit 1 ;;
     esac
 done
@@ -67,6 +85,101 @@ if [[ ! -d "$ROOT" ]]; then
     exit 1
 fi
 
+_handle_int() {
+    if (( SECONDS - _last_int_at <= 1 )); then
+        printf "\n" >&2
+        exit 130
+    fi
+    _last_int_at=$SECONDS
+    SKIP_REPO=1
+    if [[ -n "$_bg_pid" ]] && kill -0 "$_bg_pid" 2>/dev/null; then
+        kill "$_bg_pid" 2>/dev/null
+    fi
+    printf "\n  %sSkipping repo (Ctrl+C again to exit)%s\n" "$YELLOW" "$NC" >&2
+}
+trap _handle_int INT
+
+_get_remote_host() {
+    local url="$1"
+    if [[ "$url" =~ ^[a-z+]+:// ]]; then
+        url="${url#*://}"
+        url="${url#*@}"
+        url="${url%%[:/]*}"
+    else
+        url="${url#*@}"
+        url="${url%%:*}"
+    fi
+    printf '%s' "$url"
+}
+
+_get_remote_port() {
+    local url="$1"
+    if [[ "$url" =~ ^[a-z+]+:// ]]; then
+        local authority="${url#*://}"
+        authority="${authority%%/*}"
+        authority="${authority#*@}"
+        if [[ "$authority" =~ :([0-9]+)$ ]]; then
+            printf '%s' "${BASH_REMATCH[1]}"
+            return
+        fi
+    fi
+    case "$url" in
+        https://*) printf '443' ;;
+        http://*)  printf '80' ;;
+        git://*)   printf '9418' ;;
+        *)         printf '22' ;;
+    esac
+}
+
+_record_failed_host() {
+    local repo="$1" remote_name="$2"
+    local url host
+    url=$(git -C "$repo" remote get-url "$remote_name" 2>/dev/null) || return
+    host=$(_get_remote_host "$url")
+    if [[ -n "$host" && -z "${_failed_hosts[$host]+x}" ]]; then
+        _failed_hosts["$host"]=1
+        unset '_probed_hosts[$host]'
+        printf "  %sAll remotes at %s will be skipped%s\n" "$YELLOW" "$host" "$NC"
+    fi
+}
+
+_check_remote_host() {
+    local repo="$1" remote_name="$2"
+    local url host port
+    url=$(git -C "$repo" remote get-url "$remote_name" 2>/dev/null) || return 0
+    host=$(_get_remote_host "$url")
+    [[ -z "$host" ]] && return 0
+
+    [[ -n "${_failed_hosts[$host]+x}" ]] && return 1
+    [[ -n "${_probed_hosts[$host]+x}" ]] && return 0
+
+    if [[ $HAS_NC -eq 0 ]]; then
+        _probed_hosts["$host"]=1
+        return 0
+    fi
+
+    port=$(_get_remote_port "$url")
+    run_with_spinner "Probing $host:$port..." nc -z -w "$PROBE_TIMEOUT" "$host" "$port"
+    if [[ $? -eq 0 ]]; then
+        _probed_hosts["$host"]=1
+        return 0
+    else
+        _failed_hosts["$host"]=1
+        return 1
+    fi
+}
+
+_is_connection_error() {
+    [[ "$1" =~ (Connection timed out|Connection refused|Could not resolve|Could not read from remote|unable to access|the remote end hung up|Connection reset|transfer closed) ]]
+}
+
+_git() {
+    local alive_interval=$(( GIT_TIMEOUT > 15 ? GIT_TIMEOUT / 3 : 5 ))
+    local ssh_base="${GIT_SSH_COMMAND:-ssh}"
+    GIT_SSH_COMMAND="${ssh_base} -o ConnectTimeout=${GIT_TIMEOUT} -o ServerAliveInterval=${alive_interval} -o ServerAliveCountMax=3" \
+        git -c "http.lowSpeedLimit=1000" -c "http.lowSpeedTime=${GIT_TIMEOUT}" "$@"
+}
+
 # Run a command with an ASCII spinner on stderr. Captures stdout+stderr into
 # global $out. Returns the command's exit code.
 out=""
@@ -76,11 +189,11 @@ run_with_spinner() {
     tmp=$(mktemp)
 
     "$@" >"$tmp" 2>&1 &
-    local cmd_pid=$!
+    _bg_pid=$!
 
     if [[ -t 2 ]]; then
         local frames=('-' '\' '|' '/') i=0
-        while kill -0 "$cmd_pid" 2>/dev/null; do
+        while kill -0 "$_bg_pid" 2>/dev/null; do
             printf "${ERASE}  %s %s" "${frames[$((i % 4))]}" "$msg" >&2
             (( i++ )) || true
             sleep 0.1
@@ -88,7 +201,8 @@ run_with_spinner() {
         printf "${ERASE}" >&2
     fi
 
-    wait "$cmd_pid"; rc=$?
+    wait "$_bg_pid" 2>/dev/null; rc=$?
+    _bg_pid=""
     out=$(cat "$tmp")
     rm -f "$tmp"
     return $rc
@@ -114,19 +228,36 @@ do_push_all() {
     push_ok=()
     push_fail=()
     for r in "${remotes[@]}"; do
-        run_with_spinner "Pushing $name ${ARROW} $r..." git -C "$repo" push "$r"
-        if [[ $? -eq 0 ]]; then
-            push_ok+=("$r")
-        else
+        [[ $SKIP_REPO -eq 1 ]] && break
+        if ! _check_remote_host "$repo" "$r"; then
             push_fail+=("$r")
-            printf "  %sPush to %s failed:%s\n" "$RED" "$r" "$NC"
-            printf "%s\n" "$out" | sed 's/^/    /'
+            printf "  %sSkipping push to %s (host unreachable)%s\n" "$YELLOW" "$r" "$NC"
+            continue
+        fi
+        run_with_spinner "Pushing $name ${ARROW} $r..." _git -C "$repo" push "$r"; rc=$?
+        if [[ $SKIP_REPO -eq 1 ]]; then
+            break
+        elif [[ $rc -ne 0 ]]; then
+            push_fail+=("$r")
+            if _is_connection_error "$out"; then
+                _record_failed_host "$repo" "$r"
+                printf "  %sPush to %s failed (connection error)%s\n" "$RED" "$r" "$NC"
+            else
+                printf "  %sPush to %s failed:%s\n" "$RED" "$r" "$NC"
+                printf "%s\n" "$out" | sed 's/^/    /'
+            fi
+        else
+            push_ok+=("$r")
         fi
     done
     if [[ ${#push_ok[@]} -gt 0 ]]; then
         printf "  %sPushed%s %s %s\n" "$GREEN" "$NC" "$ARROW" "$(IFS=', '; echo "${push_ok[*]}")"
     fi
 }
+
+if [[ $HAS_NC -eq 0 && $OFFLINE -eq 0 ]]; then
+    printf "%sWarning: nc (netcat) not found; host probing disabled%s\n" "$YELLOW" "$NC" >&2
+fi
 
 found=0
 
@@ -147,15 +278,33 @@ while IFS= read -r -d '' gitdir; do
     name="${repo#"$ROOT"/}"
     found=1
     header_printed=0
+    SKIP_REPO=0
+    mapfile -t remotes < <(git -C "$repo" remote 2>/dev/null)
 
     if [[ $OFFLINE -eq 0 ]]; then
-        run_with_spinner "Fetching $name..." git -C "$repo" fetch --all || true
+        for r in "${remotes[@]}"; do
+            [[ $SKIP_REPO -eq 1 ]] && break
+            if ! _check_remote_host "$repo" "$r"; then
+                continue
+            fi
+            run_with_spinner "Fetching $name ${ARROW} $r..." _git -C "$repo" fetch "$r"; rc=$?
+            if [[ $SKIP_REPO -eq 1 ]]; then
+                break
+            elif [[ $rc -ne 0 ]] && _is_connection_error "$out"; then
+                _record_failed_host "$repo" "$r"
+                print_header
+                printf "  %sFetch from %s failed (connection error)%s\n" "$RED" "$r" "$NC"
+            fi
+        done
+        if [[ $SKIP_REPO -eq 1 ]]; then
+            record "$name" "skipped" "$YELLOW" "interrupted"
+            continue
+        fi
     fi
 
     branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "(detached)")
     upstream=$(git -C "$repo" rev-parse --abbrev-ref '@{u}' 2>/dev/null || echo "")
     dirty=$(git -C "$repo" status --porcelain 2>/dev/null)
-    mapfile -t remotes < <(git -C "$repo" remote 2>/dev/null)
 
     if [[ -z "$upstream" ]]; then
         if [[ -z "$dirty" ]]; then
@@ -206,7 +355,9 @@ while IFS= read -r -d '' gitdir; do
                 printf "  %sDiverged:%s %d ahead, %d behind on %s $DASH pushing\n" \
                     "$YELLOW" "$NC" "$ahead" "$behind" "$branch"
                 do_push_all "$repo" "$name"
-                if [[ ${#push_fail[@]} -eq 0 ]]; then
+                if [[ $SKIP_REPO -eq 1 ]]; then
+                    record "$name" "skipped" "$YELLOW" "interrupted"
+                elif [[ ${#push_fail[@]} -eq 0 ]]; then
                     detail="${ahead}${UP} (was diverged)"
                     [[ ${#remotes[@]} -gt 1 ]] && detail="${ahead}${UP} (${#remotes[@]} remotes, was diverged)"
                     record "$name" "pushed" "$GREEN" "$detail"
@@ -229,7 +380,9 @@ while IFS= read -r -d '' gitdir; do
                 printf "  %sUnpushed:%s %d commit(s) on %s $DASH pushing\n" \
                     "$YELLOW" "$NC" "$ahead" "$branch"
                 do_push_all "$repo" "$name"
-                if [[ ${#push_fail[@]} -eq 0 ]]; then
+                if [[ $SKIP_REPO -eq 1 ]]; then
+                    record "$name" "skipped" "$YELLOW" "interrupted"
+                elif [[ ${#push_fail[@]} -eq 0 ]]; then
                     detail="${ahead}${UP}"
                     [[ ${#remotes[@]} -gt 1 ]] && detail+=" (${#remotes[@]} remotes)"
                     record "$name" "pushed" "$GREEN" "$detail"
@@ -248,8 +401,14 @@ while IFS= read -r -d '' gitdir; do
             else
                 printf "  %sClean%s $DASH %d commit(s) to pull on %s $DASH pulling\n" \
                     "$GREEN" "$NC" "$behind" "$branch"
-                run_with_spinner "Pulling $name..." git -C "$repo" pull --ff-only; rc=$?
-                if [[ $rc -eq 0 ]]; then
+                run_with_spinner "Pulling $name..." _git -C "$repo" pull --ff-only; rc=$?
+                if [[ $SKIP_REPO -eq 1 ]]; then
+                    record "$name" "skipped" "$YELLOW" "interrupted"
+                elif [[ $rc -ne 0 ]] && _is_connection_error "$out"; then
+                    _record_failed_host "$repo" "${upstream%%/*}"
+                    printf "  %sPull failed (connection error)%s\n" "$RED" "$NC"
+                    record "$name" "pull failed" "$RED" "connection error"
+                elif [[ $rc -eq 0 ]]; then
                     printf "  %sPulled%s\n" "$GREEN" "$NC"
                     record "$name" "pulled" "$GREEN" "${behind}${DOWN}"
                 else
