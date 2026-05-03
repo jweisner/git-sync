@@ -1,4 +1,4 @@
-# git-sync
+# git-sync-all
 
 Scans a directory tree for git repositories and keeps them in sync. For each
 repo it fetches from all configured remotes, then pulls, pushes, or reports
@@ -10,16 +10,16 @@ not just `origin`.
 ### Homebrew
 
 ```sh
-brew install jweisner/git-sync/git-sync
+brew install jweisner/git-sync-all/git-sync-all
 ```
 
 ### Manual
 
-Copy the `git-sync` script to a directory on your `PATH`:
+Copy the `git-sync-all` script to a directory on your `PATH`:
 
 ```sh
-curl -Lo ~/.local/bin/git-sync https://raw.githubusercontent.com/jweisner/git-sync/main/git-sync
-chmod +x ~/.local/bin/git-sync
+curl -Lo ~/.local/bin/git-sync-all https://raw.githubusercontent.com/jweisner/git-sync-all/main/git-sync-all
+chmod +x ~/.local/bin/git-sync-all
 ```
 
 ## Behaviour
@@ -47,7 +47,7 @@ status (green = healthy, yellow = attention, red = needs intervention).
 ## Usage
 
 ```sh
-git-sync [-h] [-o] [-v] [-d] [-a] [-t N] [directory]
+git-sync-all [-h] [-o] [-v] [-d] [-a] [-t N] [directory]
 ```
 
 If `directory` is omitted, the current working directory is used.
@@ -65,7 +65,7 @@ Flags can be combined: `-vo`, `-va`, `-oda`, etc.
 
 ## Timeouts and unreachable hosts
 
-Before contacting a remote for the first time, git-sync probes the host with a
+Before contacting a remote for the first time, git-sync-all probes the host with a
 TCP connection test (`nc -z`, 5-second timeout). If the probe fails the host is
 added to a blocklist and every remote pointing at it is skipped instantly for the
 rest of the run. This keeps the script fast when a VPN is down or a server is
@@ -75,7 +75,7 @@ If `nc` (netcat) is not installed, probing is disabled and a warning is printed.
 The script will still work but will rely on git-native timeouts to detect
 unreachable hosts.
 
-For active connections, git-sync uses git's built-in stall detection rather than
+For active connections, git-sync-all uses git's built-in stall detection rather than
 a wall-clock timer, so large fetches on slow links are never killed mid-transfer:
 
 - **HTTPS**: `http.lowSpeedLimit` (1 KB/s) and `http.lowSpeedTime` abort
@@ -109,7 +109,7 @@ repos appear in the summary as `skipped` / `interrupted`.
 ## Example
 
 ```
-$ git-sync ~/projects
+$ git-sync-all ~/projects
 
 ==> ~/projects/api-server
   Unpushed: 2 commit(s) on main — pushing

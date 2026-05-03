@@ -1,4 +1,4 @@
-# Releasing git-sync
+# Releasing git-sync-all
 
 ## 1. Commit and tag
 
@@ -25,7 +25,7 @@ gh release create v1.x.0 --title "v1.x.0" --generate-notes
 ## 4. Get the tarball SHA256
 
 ```sh
-curl -sL https://github.com/jweisner/git-sync/archive/refs/tags/v1.x.0.tar.gz | sha256sum
+curl -sL https://github.com/jweisner/git-sync-all/archive/refs/tags/v1.x.0.tar.gz | sha256sum
 ```
 
 ## 5. Update the Homebrew tap
@@ -33,21 +33,21 @@ curl -sL https://github.com/jweisner/git-sync/archive/refs/tags/v1.x.0.tar.gz | 
 Clone or pull the tap repo:
 
 ```sh
-cd /path/to/homebrew-git-sync   # or: gh repo clone jweisner/homebrew-git-sync
+cd /path/to/homebrew-git-sync-all   # or: gh repo clone jweisner/homebrew-git-sync-all
 ```
 
-Edit `Formula/git-sync.rb` — update `url` and `sha256`:
+Edit `Formula/git-sync-all.rb` — update `url` and `sha256`:
 
 ```ruby
-url "https://github.com/jweisner/git-sync/archive/refs/tags/v1.x.0.tar.gz"
+url "https://github.com/jweisner/git-sync-all/archive/refs/tags/v1.x.0.tar.gz"
 sha256 "<sha256 from step 4>"
 ```
 
 Commit and push:
 
 ```sh
-git add Formula/git-sync.rb
-git commit -m "Update git-sync to v1.x.0"
+git add Formula/git-sync-all.rb
+git commit -m "Update git-sync-all to v1.x.0"
 git push
 ```
 
@@ -55,6 +55,6 @@ git push
 
 ```sh
 brew update
-brew upgrade git-sync
-git-sync --help
+brew upgrade git-sync-all
+git-sync-all --help
 ```

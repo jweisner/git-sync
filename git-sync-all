@@ -23,7 +23,7 @@ GIT_TIMEOUT=10
 SKIP_REPO=0
 _bg_pid=""
 _last_int_at=0
-_ssh_sock_dir=$(mktemp -d "${TMPDIR:-/tmp}/git-sync-ssh.XXXXXX")
+_ssh_sock_dir=$(mktemp -d "${TMPDIR:-/tmp}/git-sync-all-ssh.XXXXXX")
 declare -A _failed_hosts
 declare -A _probed_hosts
 PROBE_TIMEOUT=5
