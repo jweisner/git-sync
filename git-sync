@@ -36,8 +36,9 @@ usage() {
     cat <<EOF
 Usage: ${0##*/} [OPTIONS] [DIRECTORY]
 
-Scan DIRECTORY (default: current directory) for git repositories,
-fetch updates, pull fast-forwardable branches, and push local commits.
+Scan DIRECTORY for git repositories, fetch updates, pull fast-forwardable
+branches, and push local commits. If no DIRECTORY is given, the current
+directory is used only if it is itself a git repository.
 
 Options:
   -h, --help       Show this help message and exit
@@ -78,7 +79,15 @@ while getopts ":hovdat:-:" opt; do
 done
 shift $(( OPTIND - 1 ))
 
-ROOT="${1:-$PWD}"
+ROOT="${1:-}"
+
+if [[ -z "$ROOT" && ! -d "$PWD/.git" ]]; then
+    printf "Error: not a git repository and no directory specified.\n" >&2
+    printf "Pass a parent directory containing git repos, or run from within one.\n\n" >&2
+    usage
+fi
+
+ROOT="${ROOT:-$PWD}"
 ROOT="${ROOT%/}"
 
 if [[ ! -d "$ROOT" ]]; then
