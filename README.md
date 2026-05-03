@@ -5,6 +5,23 @@ repo it fetches from all configured remotes, then pulls, pushes, or reports
 problems depending on the state of the working tree. Pushes go to every remote,
 not just `origin`.
 
+## Install
+
+### Homebrew
+
+```sh
+brew install jweisner/git-sync/git-sync
+```
+
+### Manual
+
+Copy the `git-sync` script to a directory on your `PATH`:
+
+```sh
+curl -Lo ~/.local/bin/git-sync https://raw.githubusercontent.com/jweisner/git-sync/main/git-sync
+chmod +x ~/.local/bin/git-sync
+```
+
 ## Behaviour
 
 | State | Action |
