@@ -23,6 +23,7 @@ GIT_TIMEOUT=10
 SKIP_REPO=0
 _bg_pid=""
 _last_int_at=0
+_ssh_sock_dir=$(mktemp -d "${TMPDIR:-/tmp}/git-sync-ssh.XXXXXX")
 declare -A _failed_hosts
 declare -A _probed_hosts
 PROBE_TIMEOUT=5
@@ -98,6 +99,11 @@ _handle_int() {
     printf "\n  %sSkipping repo (Ctrl+C again to exit)%s\n" "$YELLOW" "$NC" >&2
 }
 trap _handle_int INT
+
+_cleanup() {
+    rm -rf "$_ssh_sock_dir"
+}
+trap _cleanup EXIT
 
 _get_remote_host() {
     local url="$1"
@@ -176,7 +182,7 @@ _is_connection_error() {
 _git() {
     local alive_interval=$(( GIT_TIMEOUT > 15 ? GIT_TIMEOUT / 3 : 5 ))
     local ssh_base="${GIT_SSH_COMMAND:-ssh}"
-    GIT_SSH_COMMAND="${ssh_base} -o ConnectTimeout=${GIT_TIMEOUT} -o ServerAliveInterval=${alive_interval} -o ServerAliveCountMax=3" \
+    GIT_SSH_COMMAND="${ssh_base} -o ConnectTimeout=${GIT_TIMEOUT} -o ServerAliveInterval=${alive_interval} -o ServerAliveCountMax=3 -o ControlMaster=auto -o ControlPath=${_ssh_sock_dir}/%r@%h:%p -o ControlPersist=60" \
         git -c "http.lowSpeedLimit=1000" -c "http.lowSpeedTime=${GIT_TIMEOUT}" "$@"
 }
 
