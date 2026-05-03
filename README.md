@@ -30,7 +30,7 @@ status (green = healthy, yellow = attention, red = needs intervention).
 ## Usage
 
 ```sh
-git-sync.sh [-h] [-o] [-v] [-d] [-a] [-t N] [directory]
+git-sync [-h] [-o] [-v] [-d] [-a] [-t N] [directory]
 ```
 
 If `directory` is omitted, the current working directory is used.
@@ -92,7 +92,7 @@ repos appear in the summary as `skipped` / `interrupted`.
 ## Example
 
 ```
-$ git-sync.sh ~/projects
+$ git-sync ~/projects
 
 ==> ~/projects/api-server
   Unpushed: 2 commit(s) on main — pushing
