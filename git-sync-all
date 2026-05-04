@@ -23,7 +23,7 @@ GIT_TIMEOUT=10
 SKIP_REPO=0
 _bg_pid=""
 _last_int_at=0
-_ssh_sock_dir=$(mktemp -d "${TMPDIR:-/tmp}/git-sync-all-ssh.XXXXXX")
+_ssh_sock_dir=$(mktemp -d "/tmp/gsa.XXXXXX")
 declare -A _failed_hosts
 declare -A _probed_hosts
 PROBE_TIMEOUT=5
@@ -191,7 +191,7 @@ _is_connection_error() {
 _git() {
     local alive_interval=$(( GIT_TIMEOUT > 15 ? GIT_TIMEOUT / 3 : 5 ))
     local ssh_base="${GIT_SSH_COMMAND:-ssh}"
-    GIT_SSH_COMMAND="${ssh_base} -o ConnectTimeout=${GIT_TIMEOUT} -o ServerAliveInterval=${alive_interval} -o ServerAliveCountMax=3 -o ControlMaster=auto -o ControlPath=${_ssh_sock_dir}/%r@%h:%p -o ControlPersist=60" \
+GIT_SSH_COMMAND="${ssh_base} -o ConnectTimeout=${GIT_TIMEOUT} -o ServerAliveInterval=${alive_interval} -o ServerAliveCountMax=3 -o ControlMaster=auto -o ControlPath=${_ssh_sock_dir}/%C -o ControlPersist=60" \
         git -c "http.lowSpeedLimit=1000" -c "http.lowSpeedTime=${GIT_TIMEOUT}" "$@"
 }
 
@@ -309,9 +309,9 @@ while IFS= read -r -d '' gitdir; do
             if [[ $SKIP_REPO -eq 1 ]]; then
                 break
             elif [[ $rc -ne 0 ]] && _is_connection_error "$out"; then
-                _record_failed_host "$repo" "$r"
                 fetch_fail+=("$r")
                 print_header
+                _record_failed_host "$repo" "$r"
                 printf "  %sFetch from %s failed (connection error)%s\n" "$RED" "$r" "$NC"
             fi
         done
